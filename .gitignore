@@ -1,0 +1,9 @@
+backend/config.php
+.prettierrc
+.vscode/
+.DS_Store
+node_modules/
+my_venv/
+.env
+auth/
+_*
