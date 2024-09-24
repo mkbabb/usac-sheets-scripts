@@ -1,5 +1,8 @@
+// Base URL for USAC API
 const BASE_URL = "https://opendata.usac.org/api/views/";
 
+// View IDs for different views
+// The values can be either view IDs or full view URLs
 const ViewIDs = {
     FRN_STATUS:
         "https://opendata.usac.org/E-Rate/E-Rate-Request-for-Discount-on-Services-FRN-Status/qdmp-ygft/about_data",
@@ -15,6 +18,7 @@ const ViewIDs = {
     CAT2_BUDGETS: "6brt-5pbv",
 };
 
+// Mapping of view column names to their corresponding column names in the USAC API
 const VIEW_COLUMN_NAME_MAP = {
     FRN_STATUS: {
         ben: "ben",
@@ -48,80 +52,29 @@ const VIEW_COLUMN_NAME_MAP = {
     },
 
     CAT2_BUDGETS: {
-        ben: "BEN",
+        ben: "ben",
         funding_year: null,
     },
 };
 
 const CHUNK_SIZE = 1000; // Number of records to fetch per request
 
+const GOOGLE_CHUNK_SIZE = 100; // Number of rows to set in a single batch
+
 // Chunk sizes for different options
 const OPTIONS_CHUNK_SIZES = {
-    ben: 100,
+    ben: 10,
     funding_year: null,
     state: null,
 };
-
-/**
- * Chunks an array into smaller arrays.
- * @param {Array} array - Array to be chunked
- * @param {number} chunkSize - Size of each chunk
- * @returns {Array} Array of chunks
- */
-function chunkArray(array, chunkSize) {
-    if (!array || array.length === 0 || !chunkSize) {
-        return [array];
-    }
-    const chunks = [];
-    for (let i = 0; i < array.length; i += chunkSize) {
-        chunks.push(array.slice(i, i + chunkSize));
-    }
-    return chunks;
-}
-
-/**
- * Computes the Cartesian product of multiple arrays.
- * @param {Array} arrays - Arrays to compute the Cartesian product of
- * @returns {Array} Cartesian product of the input arrays
- */
-function cartesianProduct(arrays) {
-    return arrays.reduce(
-        (acc, array) => acc.flatMap((x) => array.map((y) => [...x, y])),
-        [[]]
-    );
-}
-
-/**
- * Gets or creates a sheet with the given name.
- * @param {string} sheetName - The name of the sheet.
- * @return {Sheet} The sheet object.
- */
-function getOrCreateSheet(sheetName) {
-    let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-    if (!sheet) {
-        sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet(sheetName);
-    }
-    return sheet;
-}
-
-/**
- * Shows a toast message
- * @param {string} message - The message to display
- * @param {string} title - The title of the toast
- * @param {number} timeout - The timeout in seconds
- */
-function showToast(message, title, timeout) {
-    SpreadsheetApp.getActive().toast(message, title, timeout);
-}
 
 // Authentication function to get credentials from AUTH tab
 function getAuthCredentials() {
     const authSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("AUTH");
     if (!authSheet) {
-        throw new Error(
-            'AUTH sheet not found. Please create a sheet named "AUTH" with credentials.'
-        );
+        return null;
     }
+
     return {
         username: authSheet.getRange("B1").getValue(),
         password: authSheet.getRange("B2").getValue(),
@@ -130,6 +83,10 @@ function getAuthCredentials() {
 
 /**
  * Options class for query parameters
+ *
+ * @property {string[]} funding_year - The funding year
+ * @property {string[]} state - The state code
+ * @property {string[]} ben - The Billed Entity Number
  */
 class Options {
     constructor(fundingYear = null, state = null, ben = null) {
@@ -213,6 +170,7 @@ function generateChunkedOptionsCombinations(options, chunkSizes) {
  */
 function mapOptions(options, viewName) {
     const mappedOptions = {};
+
     Object.entries(options).forEach(([key, value]) => {
         if (value == null) {
             return;
@@ -243,35 +201,28 @@ function getConfigData() {
         SpreadsheetApp.getActiveSpreadsheet().getSheetByName("CONFIG.BEN");
 
     if (!configSheet) {
-        throw new Error(
-            'CONFIG.BEN sheet not found. Please create a sheet named "CONFIG.BEN" with the required configuration.'
-        );
+        return null;
     }
 
     const data = configSheet.getDataRange().getValues();
     const headers = data[0];
-    const yearIndex = headers.indexOf("Year");
-    const stateIndex = headers.indexOf("State");
-    const benIndex = headers.indexOf("BEN");
 
-    if (yearIndex === -1 || stateIndex === -1 || benIndex === -1) {
-        throw new Error(
-            'Required columns "Year", "State", or "BEN" not found in CONFIG.BEN sheet.'
-        );
-    }
+    const getColumnValues = (header) => {
+        const ix = headers.indexOf(header);
 
-    const years = data
-        .slice(1)
-        .map((row) => row[yearIndex])
-        .filter(Boolean);
-    const states = data
-        .slice(1)
-        .map((row) => row[stateIndex])
-        .filter(Boolean);
-    const bens = data
-        .slice(1)
-        .map((row) => row[benIndex])
-        .filter(Boolean);
+        if (ix === -1) {
+            return null;
+        }
+
+        return data
+            .slice(1)
+            .map((row) => row[ix])
+            .filter(Boolean);
+    };
+
+    const years = getColumnValues("Year");
+    const states = getColumnValues("State");
+    const bens = getColumnValues("BEN");
 
     return { years, states, bens };
 }
@@ -337,9 +288,7 @@ function getViewData() {
         SpreadsheetApp.getActiveSpreadsheet().getSheetByName("CONFIG.VIEW");
 
     if (!viewSheet) {
-        throw new Error(
-            'CONFIG.VIEW sheet not found. Please create a sheet named "CONFIG.VIEW" with the required configuration.'
-        );
+        return null;
     }
 
     const data = viewSheet.getDataRange().getValues();
@@ -416,31 +365,6 @@ function buildWhereClause(options) {
     return conditions.length > 0 ? "WHERE " + formatAndConditions(conditions) : "";
 }
 
-// Generate Authorization header
-function getAuthHeader(auth) {
-    return "Basic " + Utilities.base64Encode(auth.username + ":" + auth.password);
-}
-
-// Modified makeAuthenticatedRequest function
-function makeAuthenticatedRequest(url, params, auth) {
-    const options = {
-        method: "get",
-        headers: {
-            Authorization: getAuthHeader(auth),
-        },
-        muteHttpExceptions: true,
-    };
-
-    const fullUrl =
-        url +
-        "?" +
-        Object.entries(params)
-            .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-            .join("&");
-
-    return UrlFetchApp.fetch(fullUrl, options);
-}
-
 /**
  * Generator function to stream USAC data for a given view.
  * @param {string} viewName - The name of the view (e.g., "FRN_STATUS")
@@ -460,21 +384,23 @@ function* streamUSACData(viewName, options, auth) {
     Logger.log(`Fetching data for view: ${viewName}: ${view}`);
     Logger.log(`URL: ${url}`);
 
-    // Apply column name mapping
-    const mappedOptions = mapOptions(options, viewName);
-
     // Generate all combinations of chunked options
     const chunkedOptionsCombinations = generateChunkedOptionsCombinations(
-        mappedOptions,
+        options,
         OPTIONS_CHUNK_SIZES
     );
 
+    let isFirstChunk = true;
     for (const currentOptions of chunkedOptionsCombinations) {
         let offset = 0;
         let hasMore = true;
 
+        Logger.log(`Current options: ${JSON.stringify(currentOptions)}`);
+
         while (hasMore) {
-            const whereClause = buildWhereClause(currentOptions);
+            const mappedOptions = mapOptions(currentOptions, viewName);
+
+            const whereClause = buildWhereClause(mappedOptions);
 
             const query = `SELECT * ${whereClause} LIMIT ${CHUNK_SIZE} OFFSET ${offset}`;
 
@@ -503,12 +429,19 @@ function* streamUSACData(viewName, options, auth) {
             const data = Utilities.parseCsv(csvData);
 
             if (data.length > 1) {
-                Logger.log(`Fetched ${data.length - 1} records`);
+                Logger.log(`Fetched ${data.length - 1} records, offset: ${offset}`);
 
                 // First row is headers, so we need more than 1 row
-                yield data.slice(offset === 0 ? 0 : 1); // Remove header row for all but first chunk
+                if (isFirstChunk) {
+                    isFirstChunk = false;
+                    yield data;
+                } else {
+                    yield data.slice(1);
+                }
 
                 offset += CHUNK_SIZE;
+                // Sleep for 0.5 seconds to avoid rate limiting
+                Utilities.sleep(500);
             } else {
                 hasMore = false;
             }
@@ -518,41 +451,38 @@ function* streamUSACData(viewName, options, auth) {
 
 /**
  * Downloads USAC data for a given view and populates a sheet with the data.
+ * @param {string} sheetName - The name of the sheet to populate
  * @param {string} viewName - The name of the view (e.g., "FRN_STATUS")
  * @param {Options} options - The options for filtering the data
  * @param {Object} auth - Authentication credentials
  */
-function downloadAndPopulateUSACData(viewName, options, auth) {
-    const sheet = getOrCreateSheet(viewName);
+function downloadAndPopulateUSACData(sheetName, viewName, options, auth) {
+    const sheet = getOrCreateSheet(sheetName);
+
     sheet.clear();
 
     const dataStream = streamUSACData(viewName, options, auth);
+
     let isFirstChunk = true;
     let rowCount = 1;
 
     for (const chunk of dataStream) {
+        const range = sheet.getRange(rowCount, 1, chunk.length, chunk[0].length);
+        chunkSetValues(range, chunk, GOOGLE_CHUNK_SIZE);
+
         if (isFirstChunk) {
-            sheet.getRange(1, 1, chunk.length, chunk[0].length).setValues(chunk);
-            sheet.getRange(1, 1, 1, chunk[0].length).setFontWeight("bold");
+            range.offset(0, 0, 1, chunk[0].length).setFontWeight("bold");
             sheet.setFrozenRows(1);
 
             isFirstChunk = false;
             rowCount = chunk.length;
         } else {
-            sheet.getRange(rowCount, 1, chunk.length, chunk[0].length).setValues(chunk);
-
             rowCount += chunk.length;
         }
 
-        if (rowCount <= CHUNK_SIZE) {
-            sheet.autoResizeColumns(1, chunk[0].length);
-        }
-
-        showToast(
-            `Downloaded ${rowCount - 1} records for ${viewName}`,
-            "Download Progress",
-            2
-        );
+        // if (rowCount <= CHUNK_SIZE) {
+        //     sheet.autoResizeColumns(1, chunk[0].length);
+        // }
     }
 
     showToast(
@@ -564,11 +494,12 @@ function downloadAndPopulateUSACData(viewName, options, auth) {
     );
 }
 
-const { views: configViews } = getViewData();
-
-configViews.forEach(({ name, id }) => {
-    ViewIDs[name] = id;
-});
+const configViews = getViewData();
+if (configViews) {
+    configViews.views.forEach(({ name, id }) => {
+        ViewIDs[name] = id;
+    });
+}
 
 // parse view URLs from the ViewIDs object, if they are URLs
 Object.keys(ViewIDs).forEach((key) => {
@@ -585,15 +516,44 @@ Object.keys(ViewIDs).forEach(function (viewName) {
         const auth = getAuthCredentials();
         const config = getConfigData();
 
-        const fundingYear = normalizeFundingYear(config.years);
-        const state = normalizeState(config.states);
-        const ben = normalizeBEN(config.bens);
+        const fundingYear = normalizeFundingYear(config?.years);
+        const state = normalizeState(config?.states);
+        const ben = normalizeBEN(config?.bens);
 
         const options = new Options(fundingYear, state, ben);
 
-        downloadAndPopulateUSACData(viewName, options, auth);
+        downloadAndPopulateUSACData(viewName, viewName, options, auth);
     };
 });
+
+/**
+ * Downloads FRN_STATUS and FRN_BASIC_INFORMATION for configured years, states, and BENs.
+ */
+function downloadUSACNightlyData() {
+    const auth = getAuthCredentials();
+    const config = getConfigData();
+
+    const fundingYear = normalizeFundingYear(config?.years);
+    const state = normalizeState(config?.states);
+    const ben = normalizeBEN(config?.bens);
+
+    const options = new Options(fundingYear, state, ben);
+
+    downloadAndPopulateUSACData("FRN_STATUS", "FRN_STATUS", options, auth);
+
+    downloadAndPopulateUSACData(
+        "FRN_BASIC_INFORMATION",
+        "FRN_BASIC_INFORMATION",
+        options,
+        auth
+    );
+
+    showToast(
+        "USAC Nightly Data has been successfully downloaded.",
+        "Download Complete",
+        5
+    );
+}
 
 /**
  * Creates menu items to run the script.
@@ -609,7 +569,9 @@ function onOpen() {
         );
     });
 
-    menu.addItem("Download FRN Data (Config)", "downloadFRNData");
+    menu.addItem("Download USAC Nightly Data", "downloadUSACNightlyData");
+
+    menu.addItem("Download CAT2 Budgets & Delta", "downloadCat2BudgetsData");
 
     menu.addToUi();
 }
@@ -623,29 +585,3 @@ function onOpen() {
 //         onOpen();
 //     }
 // }
-
-/**
- * Downloads FRN_STATUS and FRN_BASIC_INFORMATION for configured years, states, and BENs.
- */
-function downloadFRNData() {
-    const auth = getAuthCredentials();
-    const config = getConfigData();
-
-    const fundingYear = normalizeFundingYear(config.years);
-    const state = normalizeState(config.states);
-    const ben = normalizeBEN(config.bens);
-
-    const options = new Options(fundingYear, state, ben);
-
-    downloadAndPopulateUSACData("FRN_STATUS", options, auth);
-    downloadAndPopulateUSACData("FRN_BASIC_INFORMATION", options, auth);
-
-    console.log(
-        `Completed downloading FRN_STATUS and FRN_BASIC_INFORMATION for configured years, states, and BENs`
-    );
-    showToast(
-        `Completed downloading FRN_STATUS and FRN_BASIC_INFORMATION for configured years, states, and BENs`,
-        "Download Complete",
-        5
-    );
-}
