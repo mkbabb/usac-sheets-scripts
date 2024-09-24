@@ -440,8 +440,8 @@ function* streamUSACData(viewName, options, auth) {
                 }
 
                 offset += CHUNK_SIZE;
-                // Sleep for 0.5 seconds to avoid rate limiting
-                Utilities.sleep(500);
+                // Sleep for 1 second to avoid rate limiting
+                Utilities.sleep(1000);
             } else {
                 hasMore = false;
             }
