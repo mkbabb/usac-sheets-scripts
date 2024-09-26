@@ -22,17 +22,11 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
         ];
     }
 
-    if (
-        currentData.length === 0 ||
-        previousData.length === 0 ||
-        headers.length === 0 ||
-        headers[0].length === 0
-    ) {
+    headers = headers.flat();
+
+    if (currentData.length === 0 || previousData.length === 0 || headers.length === 0) {
         return [["Error", "One or more input arrays are empty."]];
     }
-
-    // Flatten headers if it's a 2D array
-    const flatHeaders = headers.flat();
 
     // Ensure leftPkIndex and rightPkIndex are arrays
     leftPkIndex = Array.isArray(leftPkIndex) ? leftPkIndex.flat() : [leftPkIndex];
@@ -48,17 +42,13 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
 
     // Validate PK indices
     if (
-        leftPkIndicesZeroBased.some(
-            (index) => index < 0 || index >= flatHeaders.length
-        ) ||
-        rightPkIndicesZeroBased.some(
-            (index) => index < 0 || index >= flatHeaders.length
-        )
+        leftPkIndicesZeroBased.some((index) => index < 0 || index >= headers.length) ||
+        rightPkIndicesZeroBased.some((index) => index < 0 || index >= headers.length)
     ) {
         return [
             [
                 "Error",
-                `Invalid Primary Key index. Must be between 1 and ${flatHeaders.length}.`,
+                `Invalid Primary Key index. Must be between 1 and ${headers.length}.`,
             ],
         ];
     }
@@ -76,10 +66,12 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
             row,
         ])
     );
+
     const output = [];
 
     // Add header row with PK column names and "Changes" column
-    const pkHeaders = leftPkIndicesZeroBased.map((index) => flatHeaders[index]);
+    const pkHeaders = leftPkIndicesZeroBased.map((index) => headers[index]);
+    // @ts-ignore
     output.push([...pkHeaders, "Changes"]);
 
     for (const [pkValue, currentRow] of currentMap) {
@@ -88,11 +80,12 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
         const changes = [];
 
         if (!previousRow) {
+            // @ts-ignore
             output.push([...pkValues, "New row"]);
             continue;
         }
 
-        flatHeaders.forEach((header, index) => {
+        headers.forEach((header, index) => {
             if (leftPkIndicesZeroBased.includes(index)) return; // Skip PK columns
             const currentValue = String(currentRow[index]);
             const previousValue = String(previousRow[index]);
@@ -106,8 +99,10 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
                 const diff = currentNum - previousNum;
                 const emoji = diff > 0 ? "⬆️" : diff < 0 ? "⬇️" : "Δ";
 
+                // @ts-ignore
                 changes.push(`${emoji} ${header}: ${previousValue} → ${currentValue}`);
             } else {
+                // @ts-ignore
                 changes.push(`Δ ${header}: ${previousValue} → ${currentValue}`);
             }
         });
@@ -116,6 +111,7 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
             continue;
         }
 
+        // @ts-ignore
         output.push([...pkValues, changes.join("\n")]);
     }
 

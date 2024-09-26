@@ -89,9 +89,15 @@ function getAuthCredentials() {
  * @property {string[]} ben - The Billed Entity Number
  */
 class Options {
+    funding_year;
+    state;
+    ben;
+
     constructor(fundingYear = null, state = null, ben = null) {
         this.funding_year = fundingYear;
+
         this.state = state;
+
         this.ben = ben;
     }
 }
@@ -271,6 +277,7 @@ function parseViewURL(viewURL) {
 
     // Add language to the result if it's present
     if (lang) {
+        // @ts-ignore
         result.lang = lang;
     }
 
@@ -359,6 +366,7 @@ function buildCondition(key, value) {
  */
 function buildWhereClause(options) {
     const conditions = Object.entries(options)
+        // @ts-ignore
         .filter(([_, value]) => value != null && value.length > 0)
         .map(([key, value]) => buildCondition(key, value));
 
@@ -420,6 +428,7 @@ function* streamUSACData(viewName, options, auth) {
 
             Logger.log(`Params: ${JSON.stringify(params)}`);
 
+            // @ts-ignore
             const response = makeAuthenticatedRequest(url, params, auth);
             if (response.getResponseCode() !== 200) {
                 throw new Error(

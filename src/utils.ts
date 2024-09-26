@@ -23,6 +23,7 @@ function chunkArray(array, chunkSize) {
 
     const chunks = [];
     for (let i = 0; i < array.length; i += chunkSize) {
+        // @ts-ignore
         chunks.push(array.slice(i, i + chunkSize));
     }
 
@@ -92,6 +93,7 @@ function makeAuthenticatedRequest(url, params, auth, method) {
     };
 
     if (auth) {
+        // @ts-ignore
         options.headers = {
             Authorization: getAuthHeader(auth),
         };
@@ -101,6 +103,7 @@ function makeAuthenticatedRequest(url, params, auth, method) {
         url +
         "?" +
         Object.entries(params)
+            // @ts-ignore
             .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
             .join("&");
 
