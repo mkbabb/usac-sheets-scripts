@@ -366,7 +366,10 @@ function buildWhereClause(options) {
 }
 
 /**
- * Generator function to stream USAC data for a given view.
+ * Generator function to stream USAC data for a given view with consistent ordering.
+ *
+ * See https://dev.socrata.com/docs/queries/ for more information on SODA API queries.
+ *
  * @param {string} viewName - The name of the view (e.g., "FRN_STATUS")
  * @param {Options} options - The options for filtering the data
  * @param {Object} auth - Authentication credentials
@@ -374,7 +377,6 @@ function buildWhereClause(options) {
  */
 function* streamUSACData(viewName, options, auth) {
     const view = ViewIDs[viewName];
-
     if (!view) {
         throw new Error(`Invalid view name: ${viewName}`);
     }
@@ -391,18 +393,19 @@ function* streamUSACData(viewName, options, auth) {
     );
 
     let isFirstChunk = true;
+
     for (const currentOptions of chunkedOptionsCombinations) {
         let offset = 0;
         let hasMore = true;
 
-        Logger.log(`Current options: ${JSON.stringify(currentOptions)}`);
+        Logger.log(`Current query options: ${JSON.stringify(currentOptions)}`);
 
         while (hasMore) {
             const mappedOptions = mapOptions(currentOptions, viewName);
-
             const whereClause = buildWhereClause(mappedOptions);
 
-            const query = `SELECT * ${whereClause} LIMIT ${CHUNK_SIZE} OFFSET ${offset}`;
+            // Must have the order by clause to ensure consistent ordering whilst paging
+            const query = `SELECT * ${whereClause} ORDER BY :id LIMIT ${CHUNK_SIZE} OFFSET ${offset}`;
 
             Logger.log(`Query: ${query}`);
 
@@ -418,7 +421,6 @@ function* streamUSACData(viewName, options, auth) {
             Logger.log(`Params: ${JSON.stringify(params)}`);
 
             const response = makeAuthenticatedRequest(url, params, auth);
-
             if (response.getResponseCode() !== 200) {
                 throw new Error(
                     `HTTP request failed. Status code: ${response.getResponseCode()}, Response: ${response.getContentText()}`
@@ -431,7 +433,6 @@ function* streamUSACData(viewName, options, auth) {
             if (data.length > 1) {
                 Logger.log(`Fetched ${data.length - 1} records, offset: ${offset}`);
 
-                // First row is headers, so we need more than 1 row
                 if (isFirstChunk) {
                     isFirstChunk = false;
                     yield data;
@@ -440,9 +441,8 @@ function* streamUSACData(viewName, options, auth) {
                 }
 
                 offset += CHUNK_SIZE;
-                // Sleep for 1 second to avoid rate limiting
-                Utilities.sleep(1000);
             } else {
+                Logger.log(`No more records found, offset: ${offset}`);
                 hasMore = false;
             }
         }
@@ -468,7 +468,8 @@ function downloadAndPopulateUSACData(sheetName, viewName, options, auth) {
 
     for (const chunk of dataStream) {
         const range = sheet.getRange(rowCount, 1, chunk.length, chunk[0].length);
-        chunkSetValues(range, chunk, GOOGLE_CHUNK_SIZE);
+
+        range.setValues(chunk);
 
         if (isFirstChunk) {
             range.offset(0, 0, 1, chunk[0].length).setFontWeight("bold");
@@ -480,9 +481,9 @@ function downloadAndPopulateUSACData(sheetName, viewName, options, auth) {
             rowCount += chunk.length;
         }
 
-        // if (rowCount <= CHUNK_SIZE) {
-        //     sheet.autoResizeColumns(1, chunk[0].length);
-        // }
+        if (rowCount <= CHUNK_SIZE) {
+            sheet.autoResizeColumns(1, chunk[0].length);
+        }
     }
 
     showToast(

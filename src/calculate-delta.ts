@@ -84,14 +84,18 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
 
     for (const [pkValue, currentRow] of currentMap) {
         const previousRow = previousMap.get(pkValue);
-        if (!previousRow) continue; // Skip if no matching previous row
-
+        const pkValues = pkValue.split("|");
         const changes = [];
+
+        if (!previousRow) {
+            output.push([...pkValues, "New row"]);
+            continue;
+        }
 
         flatHeaders.forEach((header, index) => {
             if (leftPkIndicesZeroBased.includes(index)) return; // Skip PK columns
-            const currentValue = currentRow[index];
-            const previousValue = previousRow[index];
+            const currentValue = String(currentRow[index]);
+            const previousValue = String(previousRow[index]);
 
             if (currentValue === previousValue) return; // Skip if values are equal
 
@@ -112,7 +116,6 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
             continue;
         }
 
-        const pkValues = pkValue.split("|");
         output.push([...pkValues, changes.join("\n")]);
     }
 
