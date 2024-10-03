@@ -39,7 +39,7 @@ function downloadCat2BudgetsData() {
     const currentDeltaValues = deltaSheet.getDataRange().getValues();
 
     // If first value in the sheet is blank, don't append
-    if (currentDeltaValues.length > 0 && currentDeltaValues[0][0] !== "") {
+    if (currentDeltaValues?.length > 0 && currentDeltaValues[0][0] !== "") {
         appendToAllSheet(allDeltaSheet, currentDeltaValues, dateTimeString);
     }
 
@@ -47,7 +47,7 @@ function downloadCat2BudgetsData() {
     const currentRange = currentSheet.getDataRange();
     const currentValues = currentRange.getValues();
 
-    if (currentValues.length > 0 && currentValues[0][0] !== "") {
+    if (currentValues?.length > 0 && currentValues[0][0] !== "") {
         previousSheet.clear();
         previousSheet
             .getRange(1, 1, currentValues.length, currentValues[0].length)

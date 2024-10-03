@@ -16,6 +16,9 @@ const ViewIDs = {
     CONSULTANTS: "x5px-esft",
 
     CAT2_BUDGETS: "6brt-5pbv",
+
+    RHC_COMMITMENTS_AND_DISBURSEMENTS:
+        "https://opendata.usac.org/Rural-Health-Care/Rural-Health-Care-Commitments-and-Disbursements-FC/2kme-evqq/about_data",
 };
 
 // Mapping of view column names to their corresponding column names in the USAC API
@@ -23,21 +26,25 @@ const VIEW_COLUMN_NAME_MAP = {
     FRN_STATUS: {
         ben: "ben",
         state: "state",
+        year: "funding_year",
     },
 
     FRN_LINE_ITEMS: {
         ben: "ben",
         state: "state",
+        year: "funding_year",
     },
 
     FRN_RECIPIENTS_OF_SERVICE: {
         ben: "ben_no",
         state: "org_state",
+        year: "funding_year",
     },
 
     FRN_BASIC_INFORMATION: {
         ben: "epc_organization_id",
         state: "org_state",
+        year: "funding_year",
     },
 
     SUPPLEMENTAL_ENTITY_DATA: {
@@ -49,11 +56,20 @@ const VIEW_COLUMN_NAME_MAP = {
     CONSULTANTS: {
         ben: "epc_organization_id",
         state: "state",
+        year: "funding_year",
     },
 
     CAT2_BUDGETS: {
         ben: "ben",
         funding_year: null,
+    },
+
+    RHC_COMMITMENTS_AND_DISBURSEMENTS: {
+        ben: null,
+        state: "filing_hcp_state",
+        year: "funding_year",
+        
+        filing_hcp_name: "filing_hcp_name",
     },
 };
 
@@ -81,6 +97,12 @@ function getAuthCredentials() {
     };
 }
 
+const OPTIONS_COLS = {
+    Year: "funding_year",
+    State: "state",
+    BEN: "ben",
+};
+
 /**
  * Options class for query parameters
  *
@@ -89,17 +111,24 @@ function getAuthCredentials() {
  * @property {string[]} ben - The Billed Entity Number
  */
 class Options {
-    funding_year;
-    state;
-    ben;
-
     constructor(fundingYear = null, state = null, ben = null) {
+        // @ts-ignore
         this.funding_year = fundingYear;
-
+        // @ts-ignore
         this.state = state;
-
+        // @ts-ignore
         this.ben = ben;
     }
+}
+
+function normalize(value) {
+    if (!value || value.length === 0) {
+        return null;
+    }
+
+    value = Array.isArray(value) ? value : [value];
+
+    return value.map((v) => String(v).trim());
 }
 
 /**
@@ -211,6 +240,7 @@ function getConfigData() {
     }
 
     const data = configSheet.getDataRange().getValues();
+
     const headers = data[0];
 
     const getColumnValues = (header) => {
@@ -226,11 +256,32 @@ function getConfigData() {
             .filter(Boolean);
     };
 
-    const years = getColumnValues("Year");
-    const states = getColumnValues("State");
-    const bens = getColumnValues("BEN");
+    const options = {
+        year: normalizeFundingYear(getColumnValues("Year")),
+        state: normalizeState(getColumnValues("State")),
+        bens: normalizeBEN(getColumnValues("BEN")),
+    };
 
-    return { years, states, bens };
+    // Find other columns that are not in the OPTIONS_COLS
+    headers
+        .filter((header) => {
+            if (!header) {
+                return false;
+            }
+
+            header = header.trim();
+
+            if (header.length < 2) {
+                return false;
+            }
+
+            return !OPTIONS_COLS.hasOwnProperty(header);
+        })
+        .forEach((header) => {
+            options[header] = normalize(getColumnValues(header));
+        });
+
+    return options;
 }
 
 /**
@@ -507,6 +558,9 @@ function downloadAndPopulateUSACData(sheetName, viewName, options, auth) {
 const configViews = getViewData();
 if (configViews) {
     configViews.views.forEach(({ name, id }) => {
+        // Normalize the view name to be in uppercase and replace spaces with underscores:
+        // e.g., "FRN Status" => "FRN_STATUS"
+        name = name.toUpperCase().replace(/ /g, "_");
         ViewIDs[name] = id;
     });
 }
@@ -526,13 +580,7 @@ Object.keys(ViewIDs).forEach(function (viewName) {
         const auth = getAuthCredentials();
         const config = getConfigData();
 
-        const fundingYear = normalizeFundingYear(config?.years);
-        const state = normalizeState(config?.states);
-        const ben = normalizeBEN(config?.bens);
-
-        const options = new Options(fundingYear, state, ben);
-
-        downloadAndPopulateUSACData(viewName, viewName, options, auth);
+        downloadAndPopulateUSACData(viewName, viewName, config, auth);
     };
 });
 
@@ -543,18 +591,12 @@ function downloadUSACNightlyData() {
     const auth = getAuthCredentials();
     const config = getConfigData();
 
-    const fundingYear = normalizeFundingYear(config?.years);
-    const state = normalizeState(config?.states);
-    const ben = normalizeBEN(config?.bens);
-
-    const options = new Options(fundingYear, state, ben);
-
-    downloadAndPopulateUSACData("FRN_STATUS", "FRN_STATUS", options, auth);
+    downloadAndPopulateUSACData("FRN_STATUS", "FRN_STATUS", config, auth);
 
     downloadAndPopulateUSACData(
         "FRN_BASIC_INFORMATION",
         "FRN_BASIC_INFORMATION",
-        options,
+        config,
         auth
     );
 
