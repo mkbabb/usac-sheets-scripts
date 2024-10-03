@@ -4,6 +4,7 @@ const BASE_URL = "https://opendata.usac.org/api/views/";
 // View IDs for different views
 // The values can be either view IDs or full view URLs
 const ViewIDs = {
+    // E-Rate: https://opendata.usac.org/stories/s/E-rate-Tools/bneq-mh8b/
     FRN_STATUS:
         "https://opendata.usac.org/E-Rate/E-Rate-Request-for-Discount-on-Services-FRN-Status/qdmp-ygft/about_data",
 
@@ -17,6 +18,7 @@ const ViewIDs = {
 
     CAT2_BUDGETS: "6brt-5pbv",
 
+    // Rural Health Care: https://opendata.usac.org/stories/s/Rural-Health-Care-Tools/qi66-q66c/
     RHC_COMMITMENTS_AND_DISBURSEMENTS:
         "https://opendata.usac.org/Rural-Health-Care/Rural-Health-Care-Commitments-and-Disbursements-FC/2kme-evqq/about_data",
 };
@@ -68,7 +70,7 @@ const VIEW_COLUMN_NAME_MAP = {
         ben: null,
         state: "filing_hcp_state",
         year: "funding_year",
-        
+
         filing_hcp_name: "filing_hcp_name",
     },
 };
@@ -532,7 +534,11 @@ function downloadAndPopulateUSACData(sheetName, viewName, options, auth) {
         range.setValues(chunk);
 
         if (isFirstChunk) {
-            range.offset(0, 0, 1, chunk[0].length).setFontWeight("bold");
+            range
+                .offset(0, 0, 1, chunk[0].length)
+                .setFontWeight("bold")
+                .setWrap(true)
+                .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
             sheet.setFrozenRows(1);
 
             isFirstChunk = false;
