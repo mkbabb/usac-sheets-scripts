@@ -6,13 +6,7 @@
 function downloadCat2BudgetsData() {
     const auth = getAuthCredentials();
 
-    const config = getConfigData();
-
-    const fundingYear = normalizeFundingYear(config?.years);
-    const state = normalizeState(config?.states);
-    const ben = normalizeBEN(config?.bens);
-
-    const options = new Options(fundingYear, state, ben);
+    const options = getConfigData();
 
     const currentSheetName = "current";
     const previousSheetName = "previous";
@@ -39,7 +33,11 @@ function downloadCat2BudgetsData() {
     const currentDeltaValues = deltaSheet.getDataRange().getValues();
 
     // If first value in the sheet is blank, don't append
-    if (currentDeltaValues?.length > 0 && currentDeltaValues[0][0] !== "") {
+    if (
+        currentDeltaValues &&
+        currentDeltaValues?.length > 0 &&
+        currentDeltaValues[0][0] !== ""
+    ) {
         appendToAllSheet(allDeltaSheet, currentDeltaValues, dateTimeString);
     }
 
@@ -47,17 +45,16 @@ function downloadCat2BudgetsData() {
     const currentRange = currentSheet.getDataRange();
     const currentValues = currentRange.getValues();
 
-    if (currentValues?.length > 0 && currentValues[0][0] !== "") {
+    if (currentValues && currentValues?.length > 0 && currentValues[0][0] !== "") {
         previousSheet.clear();
         previousSheet
             .getRange(1, 1, currentValues.length, currentValues[0].length)
             .setValues(currentValues);
 
         appendToAllSheet(allSheet, currentValues, dateTimeString);
+        // Clear 'current' sheet
+        currentSheet.clear();
     }
-
-    // Clear 'current' sheet
-    currentSheet.clear();
 
     // Download and populate new data into 'current' sheet
     downloadAndPopulateUSACData(currentSheetName, "CAT2_BUDGETS", options, auth);
