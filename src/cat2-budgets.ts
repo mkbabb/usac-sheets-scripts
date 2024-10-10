@@ -8,12 +8,12 @@ function downloadCat2BudgetsData() {
 
     const options = getConfigData();
 
-    const currentSheetName = "current";
-    const previousSheetName = "previous";
-    const allSheetName = "running raw data";
+    const currentSheetName = "Today";
+    const previousSheetName = "Yesterday";
+    const allSheetName = "Running Raw Data";
 
-    const deltaSheetName = "delta";
-    const allDeltaSheetName = "running delta";
+    const deltaSheetName = "Changes";
+    const allDeltaSheetName = "Running Changes";
 
     const currentSheet = getOrCreateSheet(currentSheetName);
     const previousSheet = getOrCreateSheet(previousSheetName);

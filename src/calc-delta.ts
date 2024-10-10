@@ -1,3 +1,5 @@
+const TIMESTAMP_COL = "Timestamp";
+
 /**
  * Calculates the delta between current and previous data based on chosen Primary Key indices.
  * This function can be called directly from a Google Sheets cell.
@@ -77,6 +79,7 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
     for (const [pkValue, currentRow] of currentMap) {
         const previousRow = previousMap.get(pkValue);
         const pkValues = pkValue.split("|");
+
         const changes = [];
 
         if (!previousRow) {
@@ -86,7 +89,11 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
         }
 
         headers.forEach((header, index) => {
-            if (leftPkIndicesZeroBased.includes(index)) return; // Skip PK columns
+            // Skip timestamp column
+            if (header === TIMESTAMP_COL) return;
+            // Skip PK columns
+            if (leftPkIndicesZeroBased.includes(index)) return;
+
             const currentValue = String(currentRow[index]);
             const previousValue = String(previousRow[index]);
 

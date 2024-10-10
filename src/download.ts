@@ -52,7 +52,7 @@ const VIEW_COLUMN_NAME_MAP = {
     SUPPLEMENTAL_ENTITY_DATA: {
         ben: "entity_number",
         state: "physical_state",
-        funding_year: null,
+        year: null,
     },
 
     CONSULTANTS: {
@@ -63,7 +63,7 @@ const VIEW_COLUMN_NAME_MAP = {
 
     CAT2_BUDGETS: {
         ben: "ben",
-        funding_year: null,
+        year: null,
     },
 
     RHC_COMMITMENTS_AND_DISBURSEMENTS: {
@@ -100,7 +100,7 @@ function getAuthCredentials() {
 }
 
 const OPTIONS_COLS = {
-    Year: "funding_year",
+    Year: "year",
     State: "state",
     BEN: "ben",
 };
@@ -261,7 +261,7 @@ function getConfigData() {
     const options = {
         year: normalizeFundingYear(getColumnValues("Year")),
         state: normalizeState(getColumnValues("State")),
-        bens: normalizeBEN(getColumnValues("BEN")),
+        ben: normalizeBEN(getColumnValues("BEN")),
     };
 
     // Find other columns that are not in the OPTIONS_COLS
@@ -280,7 +280,13 @@ function getConfigData() {
             return !OPTIONS_COLS.hasOwnProperty(header);
         })
         .forEach((header) => {
-            options[header] = normalize(getColumnValues(header));
+            const values = normalize(getColumnValues(header));
+
+            if (!values || values.length === 0) {
+                return;
+            }
+
+            options[header] = values;
         });
 
     return options;
