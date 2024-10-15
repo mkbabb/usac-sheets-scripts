@@ -1,19 +1,33 @@
 /**
- * Downloads FRN_STATUS and FRN_BASIC_INFORMATION for configured years, states, and BENs.
- * Manages 'previous' and 'current' sheets, updating them accordingly.
- * Appends data to 'all' sheet with timestamp including hour and minute.
+ * Configuration function for sheet names and view name
+ * @returns {Object} Configuration object
  */
-function downloadCat2BudgetsData() {
+function getDeltaConfig() {
+    return {
+        currentSheetName: "Today",
+        previousSheetName: "Yesterday",
+        allSheetName: "Running Raw Data",
+        deltaSheetName: "Changes",
+        allDeltaSheetName: "Running Changes",
+        viewName: "FRN_STATUS",
+    };
+}
+
+/**
+ * Downloads and manages USAC data for configured years, states, and BENs.
+ * @param {Object} config - Configuration object containing sheet names and view name
+ */
+function downloadUSACDataAndDelta(deltaConfig) {
     const auth = getAuthCredentials();
-
     const options = getConfigData();
-
-    const currentSheetName = "Today";
-    const previousSheetName = "Yesterday";
-    const allSheetName = "Running Raw Data";
-
-    const deltaSheetName = "Changes";
-    const allDeltaSheetName = "Running Changes";
+    const {
+        currentSheetName,
+        previousSheetName,
+        allSheetName,
+        deltaSheetName,
+        allDeltaSheetName,
+        viewName,
+    } = deltaConfig;
 
     const currentSheet = getOrCreateSheet(currentSheetName);
     const previousSheet = getOrCreateSheet(previousSheetName);
@@ -31,7 +45,6 @@ function downloadCat2BudgetsData() {
     );
 
     const currentDeltaValues = deltaSheet.getDataRange().getValues();
-
     // If first value in the sheet is blank, don't append
     if (
         currentDeltaValues &&
@@ -53,11 +66,12 @@ function downloadCat2BudgetsData() {
 
         appendToAllSheet(allSheet, currentValues, dateTimeString);
         // Clear 'current' sheet
+
         currentSheet.clear();
     }
 
     // Download and populate new data into 'current' sheet
-    downloadAndPopulateUSACData(currentSheetName, "CAT2_BUDGETS", options, auth);
+    downloadAndPopulateUSACData(currentSheetName, viewName, options, auth);
 }
 
 /**
@@ -67,8 +81,11 @@ function downloadCat2BudgetsData() {
  * @param {string} dateTimeString - The date and time string to use as timestamp.
  */
 function appendToAllSheet(allSheet, data, dateTimeString) {
-    // If the headers haven't been added yet, append a "Timestmap" column
+    // If the headers haven't been added yet, append a "Timestamp" column
     const headers = data[0];
+
+    Logger.log(`Headers: ${JSON.stringify(headers)}`);
+
     if (!headers.includes("Timestamp")) {
         headers.push("Timestamp");
         allSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -76,6 +93,9 @@ function appendToAllSheet(allSheet, data, dateTimeString) {
 
     // Prepare data with timestamp
     const dataWithTimestamp = data.slice(1).map((row) => row.concat([dateTimeString]));
+
+    Logger.log(`Appending ${dataWithTimestamp.length} rows to 'all' sheet`);
+    Logger.log(`Data: ${JSON.stringify(dataWithTimestamp)}`);
 
     // Append to 'all' sheet
     allSheet
@@ -86,4 +106,9 @@ function appendToAllSheet(allSheet, data, dateTimeString) {
             dataWithTimestamp[0].length
         )
         .setValues(dataWithTimestamp);
+}
+
+// Example usage
+function runDownloadUSACData() {
+    downloadUSACDataAndDelta(getDeltaConfig());
 }
