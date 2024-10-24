@@ -1,14 +1,14 @@
 const TIMESTAMP_COL = "Timestamp";
 
 /**
- * Calculates the delta between current and previous data based on chosen Primary Key indices.
- * This function can be called directly from a Google Sheets cell.
+ * Calculates the delta between current and previous data based on chosen Primary Key indices,
+ * outputting changes in separate columns.
  * @param {Array<Array<any>>} currentData - 2D array containing current data.
  * @param {Array<Array<any>>} previousData - 2D array containing previous data.
  * @param {Array<Array<any>>} headers - 2D array containing header names.
  * @param {number|Array<number>} leftPkIndex - The index(es) of the Primary Key column(s) for current data (1-indexed).
  * @param {number|Array<number>} [rightPkIndex] - The index(es) of the Primary Key column(s) for previous data (1-indexed). If omitted, leftPkIndex is used.
- * @returns {Array<Array<any>>} A 2D array with PK columns and Changes column.
+ * @returns {Array<Array<any>>} A 2D array with PK columns and individual change columns.
  */
 function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkIndex) {
     if (
@@ -69,57 +69,74 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
         ])
     );
 
-    const output = [];
+    // Track all columns that have changes
+    const changedColumns = new Set();
+    const changesByRow = new Map();
 
-    // Add header row with PK column names and "Changes" column
-    const pkHeaders = leftPkIndicesZeroBased.map((index) => headers[index]);
-    // @ts-ignore
-    output.push([...pkHeaders, "Changes"]);
-
+    // First pass: collect all changes and identify changed columns
     for (const [pkValue, currentRow] of currentMap) {
         const previousRow = previousMap.get(pkValue);
-        const pkValues = pkValue.split("|");
-
-        const changes = [];
-
         if (!previousRow) {
-            // @ts-ignore
-            output.push([...pkValues, "New row"]);
+            changesByRow.set(pkValue, { isNew: true });
             continue;
         }
 
+        const rowChanges = {};
+
         headers.forEach((header, index) => {
-            // Skip timestamp column
-            if (header === TIMESTAMP_COL) return;
-            // Skip PK columns
-            if (leftPkIndicesZeroBased.includes(index)) return;
+            if (header === TIMESTAMP_COL || leftPkIndicesZeroBased.includes(index)) {
+                return;
+            }
 
             const currentValue = String(currentRow[index]);
             const previousValue = String(previousRow[index]);
 
-            if (currentValue === previousValue) return; // Skip if values are equal
+            if (currentValue !== previousValue) {
+                const currentNum = Number(currentValue);
+                const previousNum = Number(previousValue);
 
-            const currentNum = Number(currentValue);
-            const previousNum = Number(previousValue);
+                if (!isNaN(currentNum) && !isNaN(previousNum)) {
+                    const diff = currentNum - previousNum;
+                    const emoji = diff > 0 ? "⬆️" : "⬇️";
 
-            if (!isNaN(currentNum) && !isNaN(previousNum)) {
-                const diff = currentNum - previousNum;
-                const emoji = diff > 0 ? "⬆️" : diff < 0 ? "⬇️" : "Δ";
-
-                // @ts-ignore
-                changes.push(`${emoji} ${header}: ${previousValue} → ${currentValue}`);
-            } else {
-                // @ts-ignore
-                changes.push(`Δ ${header}: ${previousValue} → ${currentValue}`);
+                    rowChanges[
+                        header
+                    ] = `${emoji} ${previousNum.toLocaleString()} → ${currentNum.toLocaleString()}`;
+                } else {
+                    rowChanges[header] = `Δ ${previousValue} → ${currentValue}`;
+                }
+                changedColumns.add(header);
             }
         });
 
-        if (changes.length === 0) {
+        if (Object.keys(rowChanges).length > 0) {
+            changesByRow.set(pkValue, rowChanges);
+        }
+    }
+
+    // Convert changed columns to sorted array for consistent output
+    const changedColumnsList = Array.from(changedColumns).sort();
+
+    // Create output array with headers
+    const output = [];
+    const pkHeaders = leftPkIndicesZeroBased.map((index) => headers[index]);
+
+    output.push([...pkHeaders, ...changedColumnsList]);
+
+    // Second pass: create aligned output rows
+    for (const [pkValue, changes] of changesByRow) {
+        const pkValues = pkValue.split("|");
+
+        if (changes.isNew) {
+            output.push([...pkValues, ...changedColumnsList.map(() => "New row")]);
             continue;
         }
 
-        // @ts-ignore
-        output.push([...pkValues, changes.join("\n")]);
+        const row = [
+            ...pkValues,
+            ...changedColumnsList.map((column) => changes[column] || ""),
+        ];
+        output.push(row);
     }
 
     return output.length > 1 ? output : [[""]];

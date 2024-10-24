@@ -136,18 +136,28 @@ function normalize(value) {
 /**
  * Normalizes and parses the funding year input
  * @param {number[] | string[]} years - The array of funding years
- * @return {string[]|null} An array of funding years or null if the current year is selected
+ * @return {string[]|null} An array of funding years or null. If the year is "current" or "latest", it returns the current year.
  */
 function normalizeFundingYear(years) {
     if (!years || years.length === 0) {
-        const year = new Date().getFullYear();
-        return [String(year)];
+        return null;
     }
 
-    return years
+    years = normalize(years);
+
+    years = years
         .map((year) => String(year).trim())
+        .map((year) => {
+            if (year.toLowerCase() === "current" || year.toLowerCase() === "latest") {
+                return new Date().getFullYear();
+            }
+            return parseInt(year, 10);
+        })
         .map((year) => parseInt(year, 10))
         .filter((year) => !isNaN(year));
+
+    // Return a set of years as an array:
+    return Array.from(new Set(years));
 }
 
 /**
@@ -160,7 +170,10 @@ function normalizeState(states) {
         return ["NC"];
     }
 
-    return states.map((state) => state.trim().toUpperCase());
+    states = states.map((state) => state.trim().toUpperCase());
+
+    // Return a set of states as an array:
+    return Array.from(new Set(states));
 }
 
 /**
@@ -173,7 +186,9 @@ function normalizeBEN(bens) {
         return null;
     }
 
-    return bens.map((ben) => String(ben).trim());
+    bens = bens.map((ben) => String(ben).trim());
+    // Return a set of BENs as an array:
+    return Array.from(new Set(bens));
 }
 
 /**
@@ -272,8 +287,9 @@ function getConfigData() {
             }
 
             header = header.trim();
-
-            if (header.length < 2) {
+            // If the header is less than 2 characters, it's not a valid column
+            // Or if it starts with _ (underscore), it's a hidden column
+            if (header.length < 2 || header.startsWith("_")) {
                 return false;
             }
 
@@ -286,7 +302,7 @@ function getConfigData() {
                 return;
             }
 
-            options[header] = values;
+            options[header] = Array.from(new Set(values));
         });
 
     return options;
@@ -465,14 +481,21 @@ function* streamUSACData(viewName, options, auth) {
         let offset = 0;
         let hasMore = true;
 
+        const mappedOptions = mapOptions(currentOptions, viewName);
+        const whereClause = buildWhereClause(mappedOptions);
+
         Logger.log(`Current query options: ${JSON.stringify(currentOptions)}`);
+        Logger.log(`Mapped options: ${JSON.stringify(mappedOptions)}`);
 
         while (hasMore) {
-            const mappedOptions = mapOptions(currentOptions, viewName);
-            const whereClause = buildWhereClause(mappedOptions);
-
             // Must have the order by clause to ensure consistent ordering whilst paging
-            const query = `SELECT * ${whereClause} ORDER BY :id LIMIT ${CHUNK_SIZE} OFFSET ${offset}`;
+            const query = `
+SELECT *
+${whereClause}
+ORDER BY :id
+LIMIT ${CHUNK_SIZE}
+OFFSET ${offset}
+`;
 
             Logger.log(`Query: ${query}`);
 
@@ -586,66 +609,3 @@ Object.keys(ViewIDs).forEach((key) => {
         ViewIDs[key] = id;
     }
 });
-
-Object.keys(ViewIDs).forEach(function (viewName) {
-    this[`downloadView${viewName}`] = function () {
-        const auth = getAuthCredentials();
-        const config = getConfigData();
-
-        downloadAndPopulateUSACData(viewName, viewName, config, auth);
-    };
-});
-
-/**
- * Downloads FRN_STATUS and FRN_BASIC_INFORMATION for configured years, states, and BENs.
- */
-function downloadUSACNightlyData() {
-    const auth = getAuthCredentials();
-    const config = getConfigData();
-
-    downloadAndPopulateUSACData("FRN_STATUS", "FRN_STATUS", config, auth);
-
-    downloadAndPopulateUSACData(
-        "FRN_BASIC_INFORMATION",
-        "FRN_BASIC_INFORMATION",
-        config,
-        auth
-    );
-
-    showToast(
-        "USAC Nightly Data has been successfully downloaded.",
-        "Download Complete",
-        5
-    );
-}
-
-/**
- * Creates menu items to run the script.
- */
-function onOpen() {
-    const ui = SpreadsheetApp.getUi();
-    const menu = ui.createMenu("USAC Data");
-
-    Object.keys(ViewIDs).forEach(function (viewName) {
-        menu.addItem(
-            `Download ${viewName.replace(/_/g, " ")}`,
-            `downloadView${viewName}`
-        );
-    });
-
-    menu.addItem("Download USAC Nightly Data", "downloadUSACNightlyData");
-
-    menu.addItem("Download CAT2 Budgets & Delta", "downloadCat2BudgetsData");
-
-    menu.addToUi();
-}
-
-// /**
-//  * Re-populates the view IDs and menu items when the CONFIG.VIEW tab is edited.
-//  */
-// function onEdit(e) {
-//     if (e.source.getSheetName() === "CONFIG.VIEW") {
-//         populateViewIds();
-//         onOpen();
-//     }
-// }
