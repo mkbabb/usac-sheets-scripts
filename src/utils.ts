@@ -109,3 +109,50 @@ function makeAuthenticatedRequest(url, params, auth, method) {
 
     return UrlFetchApp.fetch(fullUrl, options);
 }
+
+/**
+ * Makes a request with exponential backoff retry logic
+ * @param {function} operation - Function that returns the request response
+ * @param {Object} options - Backoff options
+ * @param {number} [options.maxAttempts=5] - Maximum number of retry attempts
+ * @param {number} [options.initialDelayMs=1000] - Initial delay in milliseconds
+ * @param {number} [options.maxDelayMs=32000] - Maximum delay between retries
+ * @param {function} [options.shouldRetry] - Function to determine if error should trigger retry
+ * @returns {any} - Response from the successful request
+ * @throws {Error} - Throws if max attempts exceeded or permanent failure
+ */
+function withExponentialBackoff(operation, options = {}) {
+    const {
+        maxAttempts = 5,
+        initialDelayMs = 1000,
+        maxDelayMs = 32000,
+        shouldRetry = (error) => true,
+    } = options;
+
+    let attempts = 0;
+    let delay = initialDelayMs;
+
+    while (attempts < maxAttempts) {
+        try {
+            attempts++;
+            return operation();
+        } catch (error) {
+            if (attempts === maxAttempts || !shouldRetry(error)) {
+                throw new Error(
+                    `Operation failed after ${attempts} attempts: ${error.message}`
+                );
+            }
+
+            // Log retry attempt
+            Logger.log(
+                `Request failed, attempt ${attempts}/${maxAttempts}. Retrying in ${delay}ms. Error: ${error.message}`
+            );
+
+            // Sleep for the calculated delay
+            Utilities.sleep(delay);
+
+            // Calculate next delay with exponential backoff, but don't exceed maxDelayMs
+            delay = Math.min(delay * 2, maxDelayMs);
+        }
+    }
+}

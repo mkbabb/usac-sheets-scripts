@@ -108,7 +108,15 @@ function clearCurrentDayData(sheet, dateToMatch) {
 function appendToAllSheet(allSheet, data, dateTimeString) {
     // If the headers haven't been added yet, append a "Timestamp" column
     const headers = data[0];
+
+    // If the headers are null, or there's only headers, return
+    if (headers == null || headers.length === 0) {
+        Logger.log("Data in 'all' sheet is empty, skipping appending");
+        return;
+    }
+
     Logger.log(`Headers: ${JSON.stringify(headers)}`);
+
     if (!headers.includes("Timestamp")) {
         headers.push("Timestamp");
         allSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -116,7 +124,9 @@ function appendToAllSheet(allSheet, data, dateTimeString) {
 
     // Prepare data with timestamp
     const dataWithTimestamp = data.slice(1).map((row) => row.concat([dateTimeString]));
+
     Logger.log(`Appending ${dataWithTimestamp.length} rows to 'all' sheet`);
+
     Logger.log(`Data: ${JSON.stringify(dataWithTimestamp)}`);
 
     // Append to 'all' sheet

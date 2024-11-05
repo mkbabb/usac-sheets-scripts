@@ -449,10 +449,7 @@ function buildWhereClause(options) {
 }
 
 /**
- * Generator function to stream USAC data for a given view with consistent ordering.
- *
- * See https://dev.socrata.com/docs/queries/ for more information on SODA API queries.
- *
+ * Generator function to stream USAC data with exponential backoff retry logic
  * @param {string} viewName - The name of the view (e.g., "FRN_STATUS")
  * @param {Options} options - The options for filtering the data
  * @param {Object} auth - Authentication credentials
@@ -488,14 +485,13 @@ function* streamUSACData(viewName, options, auth) {
         Logger.log(`Mapped options: ${JSON.stringify(mappedOptions)}`);
 
         while (hasMore) {
-            // Must have the order by clause to ensure consistent ordering whilst paging
             const query = `
-SELECT *
-${whereClause}
-ORDER BY :id
-LIMIT ${CHUNK_SIZE}
-OFFSET ${offset}
-`;
+  SELECT *
+  ${whereClause}
+  ORDER BY :id
+  LIMIT ${CHUNK_SIZE}
+  OFFSET ${offset}
+  `;
 
             Logger.log(`Query: ${query}`);
 
@@ -510,13 +506,35 @@ OFFSET ${offset}
 
             Logger.log(`Params: ${JSON.stringify(params)}`);
 
-            // @ts-ignore
-            const response = makeAuthenticatedRequest(url, params, auth);
-            if (response.getResponseCode() !== 200) {
-                throw new Error(
-                    `HTTP request failed. Status code: ${response.getResponseCode()}, Response: ${response.getContentText()}`
-                );
-            }
+            // Wrap the request in exponential backoff
+            const response = withExponentialBackoff(
+                () => makeAuthenticatedRequest(url, params, auth),
+                {
+                    maxAttempts: 5,
+                    initialDelayMs: 1000,
+                    maxDelayMs: 32000,
+                    shouldRetry: (error) => {
+                        const errorStr = error.toString();
+
+                        // Retry on connection errors, rate limits (429),
+                        // and server errors (500s)
+                        if (
+                            errorStr.includes("Connection timed out") ||
+                            errorStr.includes("429") ||
+                            /50[0-9]/.test(errorStr)
+                        ) {
+                            return true;
+                        }
+
+                        // Don't retry on authentication errors or bad requests
+                        if (errorStr.includes("401") || errorStr.includes("400")) {
+                            return false;
+                        }
+
+                        return true;
+                    },
+                }
+            );
 
             const csvData = response.getContentText();
             const data = Utilities.parseCsv(csvData);
