@@ -129,6 +129,12 @@ function appendToAllSheet(allSheet, data, dateTimeString) {
 
     Logger.log(`Data: ${JSON.stringify(dataWithTimestamp)}`);
 
+    // If no data to append, return
+    if (dataWithTimestamp.length === 0) {
+        Logger.log("No data to append, skipping appending");
+        return;
+    }
+
     // Append to 'all' sheet
     allSheet
         .getRange(
