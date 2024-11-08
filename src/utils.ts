@@ -77,6 +77,14 @@ function getAuthHeader(auth) {
 }
 
 /**
+ * Gets the download function name for the given view name.
+ * @param {string} viewName - The name of the view.
+ */
+function getDownloadFunctionName(viewName) {
+    return `downloadView${viewName}`;
+}
+
+/**
  * Makes an authenticated request to the given URL with the given parameters.
  * @param {string} url - The URL to make the request to.
  * @param {Object} params - The parameters to include in the request.

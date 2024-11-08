@@ -1,5 +1,5 @@
 function downloadAll2021_2025_CAT_2() {
-    return USACNightly.downloadViewALL_2021_2025_CATEGORY_2();
+    return USACNightly["downloadViewALL_2021_2025_CATEGORY_2"]();
 }
 
 /**

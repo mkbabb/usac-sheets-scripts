@@ -23,6 +23,8 @@ const ViewIDs = {
         "https://opendata.usac.org/Rural-Health-Care/Rural-Health-Care-Commitments-and-Disbursements-FC/2kme-evqq/about_data",
 };
 
+this.ViewIDs = ViewIDs;
+
 // Mapping of view column names to their corresponding column names in the USAC API
 const VIEW_COLUMN_NAME_MAP = {
     FRN_STATUS: {
@@ -626,4 +628,19 @@ Object.keys(ViewIDs).forEach((key) => {
         const { id } = parseViewURL(value);
         ViewIDs[key] = id;
     }
+});
+
+
+
+Object.keys(ViewIDs).forEach((viewName) => {
+    const downloadFunctionName = getDownloadFunctionName(viewName);
+
+    const downloadFunction = function () {
+        const auth = getAuthCredentials();
+        const config = getConfigData();
+
+        downloadAndPopulateUSACData(viewName, viewName, config, auth);
+    };
+
+    this[downloadFunctionName] = downloadFunction;
 });
