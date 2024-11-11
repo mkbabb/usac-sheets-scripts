@@ -100,48 +100,57 @@ function clearCurrentDayData(sheet, dateToMatch) {
 }
 
 /**
- * Appends data to the 'all' sheet with a timestamp column including hour and minute.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} allSheet - The 'all' sheet.
- * @param {Array<Array<any>>} data - The data to append.
- * @param {string} dateTimeString - The date and time string to use as timestamp.
+ * Appends data to the 'all' sheet with proper header alignment and timestamp
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} allSheet - The 'all' sheet
+ * @param {Array<Array<any>>} data - The data to append
+ * @param {string} dateTimeString - The date and time string to use as timestamp
+ * @throws {Error} If data is invalid or sheet operations fail
  */
 function appendToAllSheet(allSheet, data, dateTimeString) {
-    // If the headers haven't been added yet, append a "Timestamp" column
-    const headers = data[0];
-
-    // If the headers are null, or there's only headers, return
-    if (headers == null || headers.length === 0) {
-        Logger.log("Data in 'all' sheet is empty, skipping appending");
+    if (!data || !data.length || !data[0].length) {
+        Logger.log("Data is empty, skipping appending");
         return;
     }
 
-    Logger.log(`Headers: ${JSON.stringify(headers)}`);
+    try {
+        // Convert input data to dictionary format
+        const inputHeaders = data[0];
+        const dictData = convertToDict(data);
 
-    if (!headers.includes("Timestamp")) {
-        headers.push("Timestamp");
-        allSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+        // Add timestamp to each row
+        dictData.forEach((row) => {
+            row["Timestamp"] = dateTimeString;
+        });
+
+        let targetHeaders;
+        let finalData;
+
+        // Check if sheet already has data
+        if (allSheet.getLastRow() > 0) {
+            // Get existing headers and align data
+            targetHeaders = getSheetHeaders(allSheet);
+            finalData = alignDataToHeaders(dictData, targetHeaders);
+        } else {
+            // New sheet - use input headers plus Timestamp
+            targetHeaders = [...inputHeaders, "Timestamp"];
+            allSheet.getRange(1, 1, 1, targetHeaders.length).setValues([targetHeaders]);
+            finalData = alignDataToHeaders(dictData, targetHeaders);
+        }
+
+        // Only append if we have data rows
+        if (finalData.length > 0) {
+            Logger.log(`Appending ${finalData.length} rows to 'all' sheet`);
+            allSheet
+                .getRange(
+                    allSheet.getLastRow() + 1,
+                    1,
+                    finalData.length,
+                    targetHeaders.length
+                )
+                .setValues(finalData);
+        }
+    } catch (error) {
+        Logger.log(`Error in appendToAllSheet: ${error.message}`);
+        throw error;
     }
-
-    // Prepare data with timestamp
-    const dataWithTimestamp = data.slice(1).map((row) => row.concat([dateTimeString]));
-
-    Logger.log(`Appending ${dataWithTimestamp.length} rows to 'all' sheet`);
-
-    Logger.log(`Data: ${JSON.stringify(dataWithTimestamp)}`);
-
-    // If no data to append, return
-    if (dataWithTimestamp.length === 0) {
-        Logger.log("No data to append, skipping appending");
-        return;
-    }
-
-    // Append to 'all' sheet
-    allSheet
-        .getRange(
-            allSheet.getLastRow() + 1,
-            1,
-            dataWithTimestamp.length,
-            dataWithTimestamp[0].length
-        )
-        .setValues(dataWithTimestamp);
 }

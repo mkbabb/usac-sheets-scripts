@@ -164,3 +164,74 @@ function withExponentialBackoff(operation, options = {}) {
         }
     }
 }
+
+/**
+ * @typedef {Object<string, any>} DataRow
+ * A single row of data represented as an object where keys are column headers
+ */
+
+/**
+ * Converts a 2D array of data with headers into an array of objects
+ * @param {Array<Array<any>>} data - 2D array where first row contains headers
+ * @returns {Array<DataRow>} Array of objects where keys are headers and values are row data
+ * @throws {Error} If data is empty or malformed
+ */
+function convertToDict(data) {
+    if (!data || !data.length || !data[0].length) {
+        throw new Error("Invalid data structure: Empty or malformed data");
+    }
+
+    const headers = data[0];
+    const rows = data.slice(1);
+
+    return rows.map((row) => {
+        const rowDict = {};
+        headers.forEach((header, index) => {
+            if (header) {
+                // Only include non-empty headers
+                rowDict[header] = row[index];
+            }
+        });
+        return rowDict;
+    });
+}
+
+/**
+ * Aligns data with target headers, filling missing values with null
+ * @param {Array<DataRow>} dictData - Array of data objects
+ * @param {Array<string>} targetHeaders - Headers to align data to
+ * @returns {Array<Array<any>>} 2D array aligned with target headers
+ * @throws {Error} If input parameters are invalid
+ */
+function alignDataToHeaders(dictData, targetHeaders) {
+    if (!Array.isArray(dictData) || !Array.isArray(targetHeaders)) {
+        throw new Error("Invalid input: dictData and targetHeaders must be arrays");
+    }
+
+    if (!targetHeaders.length) {
+        throw new Error("Target headers array cannot be empty");
+    }
+
+    return dictData.map((row) => {
+        return targetHeaders.map((header) => {
+            return row.hasOwnProperty(header) ? row[header] : null;
+        });
+    });
+}
+
+/**
+ * Gets existing headers from a sheet
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - The sheet to get headers from
+ * @returns {Array<string>} Array of header strings
+ * @throws {Error} If sheet is empty or headers can't be retrieved
+ */
+function getSheetHeaders(sheet) {
+    const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+    const headers = headerRange.getValues()[0];
+
+    if (!headers.length) {
+        throw new Error("No headers found in sheet");
+    }
+
+    return headers;
+}
