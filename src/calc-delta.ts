@@ -76,13 +76,24 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
     // First pass: collect all changes and identify changed columns
     for (const [pkValue, currentRow] of currentMap) {
         const previousRow = previousMap.get(pkValue);
+
+        // If the previous row is missing, add all columns as changes
         if (!previousRow) {
-            changesByRow.set(pkValue, { isNew: true });
+            const currentRowMap = {
+                "New Row": "New Row",
+            };
+            headers.forEach((header, index) => {
+                currentRowMap[header] = currentRow[index];
+            });
+
+            // Add a "New Row" column:
+            changedColumns.add("New Row");
+
+            changesByRow.set(pkValue, currentRowMap);
             continue;
         }
 
         const rowChanges = {};
-
         headers.forEach((header, index) => {
             if (header === TIMESTAMP_COL || leftPkIndicesZeroBased.includes(index)) {
                 return;
@@ -91,22 +102,26 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
             const currentValue = String(currentRow[index]);
             const previousValue = String(previousRow[index]);
 
-            if (currentValue !== previousValue) {
-                const currentNum = Number(currentValue);
-                const previousNum = Number(previousValue);
-
-                if (!isNaN(currentNum) && !isNaN(previousNum)) {
-                    const diff = currentNum - previousNum;
-                    const emoji = diff > 0 ? "⬆️" : "⬇️";
-
-                    rowChanges[
-                        header
-                    ] = `${emoji} ${previousNum.toLocaleString()} → ${currentNum.toLocaleString()}`;
-                } else {
-                    rowChanges[header] = `Δ ${previousValue} → ${currentValue}`;
-                }
-                changedColumns.add(header);
+            // Skip if values are the same
+            if (currentValue === previousValue) {
+                return;
             }
+
+            const currentNum = Number(currentValue);
+            const previousNum = Number(previousValue);
+
+            if (!isNaN(currentNum) && !isNaN(previousNum)) {
+                const diff = currentNum - previousNum;
+                const emoji = diff > 0 ? "⬆️" : "⬇️";
+
+                rowChanges[
+                    header
+                ] = `${emoji} ${previousNum.toLocaleString()} → ${currentNum.toLocaleString()}`;
+            } else {
+                rowChanges[header] = `Δ ${previousValue} → ${currentValue}`;
+            }
+
+            changedColumns.add(header);
         });
 
         if (Object.keys(rowChanges).length > 0) {
@@ -115,27 +130,39 @@ function CALC_DELTA(currentData, previousData, headers, leftPkIndex, rightPkInde
     }
 
     // Convert changed columns to sorted array for consistent output
-    const changedColumnsList = Array.from(changedColumns).sort();
+    const changedColumnsList = Array.from(changedColumns);
+
+    // Align the changed columns list to the headers:
+    changedColumnsList.sort((a, b) => headers.indexOf(a) - headers.indexOf(b));
+
+    // Ensure the "New Row" column is always last:
+    if (changedColumnsList.includes("New Row")) {
+        changedColumnsList.splice(changedColumnsList.indexOf("New Row"), 1);
+        changedColumnsList.push("New Row");
+    }
 
     // Create output array with headers
     const output = [];
     const pkHeaders = leftPkIndicesZeroBased.map((index) => headers[index]);
 
+    // @ts-ignore
     output.push([...pkHeaders, ...changedColumnsList]);
 
     // Second pass: create aligned output rows
     for (const [pkValue, changes] of changesByRow) {
         const pkValues = pkValue.split("|");
 
-        if (changes.isNew) {
-            output.push([...pkValues, ...changedColumnsList.map(() => "New row")]);
+        if (!pkValues.every((value) => value !== "")) {
             continue;
         }
 
         const row = [
             ...pkValues,
+            // @ts-ignore
             ...changedColumnsList.map((column) => changes[column] || ""),
         ];
+
+        // @ts-ignore
         output.push(row);
     }
 
